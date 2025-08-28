@@ -47,7 +47,7 @@ pub struct Variable {
 pub enum Statement {
     /// `X := <expr>;`
     Assign {
-        target: Variable,
+        target: Expression,
         value: Expression,
         line: usize,
     },

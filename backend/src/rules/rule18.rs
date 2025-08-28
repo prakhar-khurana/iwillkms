@@ -2,10 +2,16 @@
 //! Verify OB86 (Rack Failure), OB121 (Programming Error), OB82 (Diagnostic Interrupt)
 //! exist and contain at least one diagnostic/alarm action.
 
-use crate::ast::{FunctionKind, Program, Statement};
-use super::{RuleResult, Violation};
+use crate::ast::{Expression, FunctionKind, Program, Statement};
+use super::{Policy, RuleResult, Violation};
 
-pub fn check(program: &Program) -> RuleResult {
+pub fn check(program: &Program, policy: &Policy) -> RuleResult {
+    // This is an S7-specific rule. Only run if the platform is configured as S7.
+    let is_s7 = policy.platform.as_deref().unwrap_or("").eq_ignore_ascii_case("S7");
+    if !is_s7 {
+        return RuleResult::ok(18, "Log PLC hard stops");
+    }
+
     let mut violations = vec![];
     check_ob(program, FunctionKind::OB86, "OB86 (Rack Failure)", &mut violations);
     check_ob(program, FunctionKind::OB121, "OB121 (Programming Error)", &mut violations);
@@ -50,10 +56,12 @@ fn has_diag_action(stmts: &[Statement]) -> bool {
     for st in stmts {
         match st {
             Statement::Assign { target, value, .. } => {
-                let t = target.name.to_ascii_uppercase();
-                let v = super::utils::expr_text(value).to_ascii_uppercase();
-                if t.contains("ALARM") || t.contains("DIAG") || t.contains("FAULT") || v.contains("LOG") {
-                    return true;
+                if let Expression::VariableRef(target_name) = target {
+                    let t = target_name.to_ascii_uppercase();
+                    let v = super::utils::expr_text(value).to_ascii_uppercase();
+                    if t.contains("ALARM") || t.contains("DIAG") || t.contains("FAULT") || v.contains("LOG") {
+                        return true;
+                    }
                 }
             }
             Statement::Call { name, .. } => {

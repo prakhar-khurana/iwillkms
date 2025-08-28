@@ -45,7 +45,7 @@ pub fn parse_il_from_str(src: &str) -> Result<Program, String> {
             "ST" => { // Store accumulator value into a variable
                 if let (Some(target_var), Some(value_expr)) = (operand, current_result.take()) {
                     let stmt = Statement::Assign {
-                        target: Variable { name: target_var },
+                        target: Expression::VariableRef(target_var),
                         value: value_expr,
                         line: line_no,
                     };

@@ -59,9 +59,14 @@ fn has_integrity_check(stmts: &[Statement]) -> bool {
             let c = utils::expr_text(condition).to_ascii_uppercase();
             let mentions_sens = c.contains("CHECKSUM") || c.contains("CRC");
             let is_compare = c.contains("<>") || c.contains("!=");
-            let sets_alarm = then_branch.iter().any(|s| matches!(s,
-                Statement::Assign { target, .. } if target.name.to_ascii_uppercase().contains("ALARM")
-            ));
+            let sets_alarm = then_branch.iter().any(|s| {
+                if let Statement::Assign { target, .. } = s {
+                    if let Expression::VariableRef(name) = target {
+                        return name.to_ascii_uppercase().contains("ALARM");
+                    }
+                }
+                false
+            });
             if mentions_sens && is_compare && sets_alarm { return true; }
             if has_integrity_check(then_branch) { return true; }
         }

@@ -2,7 +2,7 @@
 //! Accept either: (A) SFC6/RD_SINFO used and uptime reported to HMI/DB/LOG,
 //! or (B) a monotonic UPTIME counter that is periodically stored/logged.
 
-use crate::ast::{Program, Statement};
+use crate::ast::{Expression, Program, Statement};
 use super::{RuleResult, Violation, utils::expr_text};
 
 pub fn check(program: &Program) -> RuleResult {
@@ -25,11 +25,13 @@ pub fn check(program: &Program) -> RuleResult {
                     }
                 }
                 Statement::Assign { target, value, .. } => {
-                    // Monotonic counter like Uptime := Uptime + 1
-                    let tgt = target.name.to_ascii_uppercase();
-                    let vtxt = expr_text(value).to_ascii_uppercase();
-                    if tgt.contains("UPTIME") && vtxt.contains("UPTIME") && vtxt.contains("+") {
-                        monotonic_uptime = true;
+                    if let Expression::VariableRef(target_name) = target {
+                        // Monotonic counter like Uptime := Uptime + 1
+                        let tgt = target_name.to_ascii_uppercase();
+                        let vtxt = expr_text(value).to_ascii_uppercase();
+                        if tgt.contains("UPTIME") && vtxt.contains("UPTIME") && vtxt.contains("+") {
+                            monotonic_uptime = true;
+                        }
                     }
                 }
                 _ => {}
@@ -39,13 +41,15 @@ pub fn check(program: &Program) -> RuleResult {
         // Second pass: detect reporting to HMI/DB/LOG
         for st in &f.statements {
             if let Statement::Assign { target, value, .. } = st {
-                let tgt = target.name.to_ascii_uppercase();
-                let vtxt = expr_text(value).to_ascii_uppercase();
-                if (tgt.contains("HMI") || tgt.contains("DB") || tgt.contains("LOG"))
-                    && (vtxt.contains("UPTIME") || vtxt.contains("SFC6") || vtxt.contains("RD_SINFO") || vtxt.contains("RUNTIME"))
-                {
-                    uptime_reported = true;
-                    break;
+                if let Expression::VariableRef(target_name) = target {
+                    let tgt = target_name.to_ascii_uppercase();
+                    let vtxt = expr_text(value).to_ascii_uppercase();
+                    if (tgt.contains("HMI") || tgt.contains("DB") || tgt.contains("LOG"))
+                        && (vtxt.contains("UPTIME") || vtxt.contains("SFC6") || vtxt.contains("RD_SINFO") || vtxt.contains("RUNTIME"))
+                    {
+                        uptime_reported = true;
+                        break;
+                    }
                 }
             }
         }

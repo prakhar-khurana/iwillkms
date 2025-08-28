@@ -1,6 +1,6 @@
 //! Rule 10: Assign designated register blocks (policy-based RO regions)
 
-use crate::ast::{Program, Statement};
+use crate::ast::{Expression, Program, Statement};
 use super::{Policy, RuleResult, Violation};
 
 pub fn check(program: &Program, policy: &Policy) -> RuleResult {
@@ -14,16 +14,18 @@ pub fn check(program: &Program, policy: &Policy) -> RuleResult {
     for func in &program.functions {
         for st in &func.statements {
             if let Statement::Assign { target, line, .. } = st {
-                if let Some((area, addr)) = parse_mem_address(&target.name) {
-                    for r in areas {
-                        if r.access.to_ascii_lowercase() == "readonly" && r.applies(&area, addr) {
-                            violations.push(Violation {
-                                rule_no: 10,
-                                rule_name: "Assign designated register blocks",
-                                line: *line,
-                                reason: format!("Write to read-only region {}{}", area, addr),
-                                suggestion: "Move this write to an allowed area or update policy.json".into(),
-                            });
+                if let Expression::VariableRef(target_name) = target {
+                    if let Some((area, addr)) = parse_mem_address(target_name) {
+                        for r in areas {
+                            if r.access.to_ascii_lowercase() == "readonly" && r.applies(&area, addr) {
+                                violations.push(Violation {
+                                    rule_no: 10,
+                                    rule_name: "Assign designated register blocks",
+                                    line: *line,
+                                    reason: format!("Write to read-only region {}{}", area, addr),
+                                    suggestion: "Move this write to an allowed area or update policy.json".into(),
+                                });
+                            }
                         }
                     }
                 }

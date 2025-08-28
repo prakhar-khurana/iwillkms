@@ -26,29 +26,31 @@ fn scan(stmts: &[Statement], tainted: &mut HashSet<String>, guard_stack: Vec<Str
     for st in stmts {
         match st {
             Statement::Assign { target, value, line } => {
-                let mut rhs_vars = HashSet::new();
-                collect_vars(value, &mut rhs_vars);
+                if let Expression::VariableRef(target_name) = target {
+                    let mut rhs_vars = HashSet::new();
+                    collect_vars(value, &mut rhs_vars);
 
-                let rhs_is_tainted = expr_has_sensitive_source(value) || rhs_vars.iter().any(|v| tainted.contains(v));
+                    let rhs_is_tainted = expr_has_sensitive_source(value) || rhs_vars.iter().any(|v| tainted.contains(v));
 
-                let annotated = utils::has_plausibility_annotation_above(*line, 3);
-                let guard_text = current_guard_for_line(*line, &guard_stack);
-                let guard_validates = guard_has_validation_for(&guard_text, &rhs_vars);
+                    let annotated = utils::has_plausibility_annotation_above(*line, 3);
+                    let guard_text = current_guard_for_line(*line, &guard_stack);
+                    let guard_validates = guard_has_validation_for(&guard_text, &rhs_vars);
 
-                if rhs_is_tainted && !(annotated || guard_validates) {
-                    tainted.insert(target.name.to_ascii_uppercase());
-                } else {
-                    tainted.remove(&target.name.to_ascii_uppercase());
-                }
+                    if rhs_is_tainted && !(annotated || guard_validates) {
+                        tainted.insert(target_name.to_ascii_uppercase());
+                    } else {
+                        tainted.remove(&target_name.to_ascii_uppercase());
+                    }
 
-                if is_assignment_sink(&target.name) && rhs_is_tainted && !(annotated || guard_validates) {
-                    out.push(Violation {
-                        rule_no: 8,
-                        rule_name: "Validate HMI input variables".into(),
-                        line: *line,
-                        reason: format!("Untrusted data flows into sensitive variable '{}'", target.name),
-                        suggestion: "Add plausibility/authorization checks (range limits, state checks) or a nearby @PlausibilityCheck.".into(),
-                    });
+                    if is_assignment_sink(target_name) && rhs_is_tainted && !(annotated || guard_validates) {
+                        out.push(Violation {
+                            rule_no: 8,
+                            rule_name: "Validate HMI input variables".into(),
+                            line: *line,
+                            reason: format!("Untrusted data flows into sensitive variable '{}'", target_name),
+                            suggestion: "Add plausibility/authorization checks (range limits, state checks) or a nearby @PlausibilityCheck.".into(),
+                        });
+                    }
                 }
             }
 

@@ -13,9 +13,11 @@ pub fn check(program: &Program) -> RuleResult {
         for st in &f.statements {
             match st {
                 Statement::Assign { target, .. } => {
-                    let n = target.name.to_ascii_uppercase();
-                    if n.contains("MODE") || n.contains("AUTO") || n.contains("MANUAL") || n.contains("RUNSTATE") {
-                        has_mode = true; break;
+                    if let Expression::VariableRef(name) = target {
+                        let n = name.to_ascii_uppercase();
+                        if n.contains("MODE") || n.contains("AUTO") || n.contains("MANUAL") || n.contains("RUNSTATE") {
+                            has_mode = true; break;
+                        }
                     }
                 }
                 Statement::IfStmt { condition, .. } => {
@@ -24,7 +26,13 @@ pub fn check(program: &Program) -> RuleResult {
                         has_mode = true; break;
                     }
                 }
-                Statement::CaseStmt { .. } => { has_mode = true; break; }
+                 Statement::CaseStmt { expression, .. } => {
+                    let c = expr_text(expression).to_ascii_uppercase();
+                    // A CASE statement on a variable with "STATE" or "STEP" is a state machine.
+                    if c.contains("MODE") || c.contains("STATE") || c.contains("STEP") {
+                        has_mode = true; break;
+                    }
+                }
                 _ => {}
             }
         }

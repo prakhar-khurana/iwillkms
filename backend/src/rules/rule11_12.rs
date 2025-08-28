@@ -33,43 +33,45 @@ fn walk(stmts: &[Statement], out: &mut Vec<Violation>, mode: Mode) {
     for st in stmts {
         match st {
             Statement::Assign { target, value, line } => {
-                let sensitive_use = expr_has_sensitive_source(value);
-                let is_sink       = is_sensitive_sink(&target.name);
-                if sensitive_use && is_sink {
-                    let has_nearby_annotation = utils::has_plausibility_annotation_above(*line, 3);
-                    let guards_text           = utils::current_guard_text(*line);
-                    let has_guard_validation  = guard_validates_value(&guards_text, value);
+                if let Expression::VariableRef(target_name) = target {
+                    let sensitive_use = expr_has_sensitive_source(value);
+                    let is_sink       = is_sensitive_sink(target_name);
+                    if sensitive_use && is_sink {
+                        let has_nearby_annotation = utils::has_plausibility_annotation_above(*line, 3);
+                        let guards_text           = utils::current_guard_text(*line);
+                        let has_guard_validation  = guard_validates_value(&guards_text, value);
 
-                    match mode {
-                        Mode::Presence => {
-                            if !(has_nearby_annotation || has_guard_validation) {
-                                out.push(Violation {
-                                    rule_no: 11,
-                                    rule_name: "Plausibility Checks".into(),
-                                    line: *line,
-                                    reason: format!(
-                                        "Use of sensitive value '{}' without plausibility validation",
-                                        utils::expr_text(value)
-                                    ),
-                                    suggestion: "Add a nearby @PlausibilityCheck or guard with range/authorization before this use.".into(),
-                                });
-                            }
-                        }
-                        Mode::Enforcement => {
-                            if has_nearby_annotation || has_guard_validation {
-                                let gated = guard_enforces(&guards_text, value, &target.name)
-                                    || utils::has_plausibility_annotation_above(*line, 1);
-                                if !gated {
+                        match mode {
+                            Mode::Presence => {
+                                if !(has_nearby_annotation || has_guard_validation) {
                                     out.push(Violation {
-                                        rule_no: 12,
+                                        rule_no: 11,
                                         rule_name: "Plausibility Checks".into(),
                                         line: *line,
                                         reason: format!(
-                                            "Plausibility present but not enforced before assigning '{}'",
-                                            target.name
+                                            "Use of sensitive value '{}' without plausibility validation",
+                                            utils::expr_text(value)
                                         ),
-                                        suggestion: "Use the plausibility result to gate this action (e.g., IF setpointOK THEN assign).".into(),
+                                        suggestion: "Add a nearby @PlausibilityCheck or guard with range/authorization before this use.".into(),
                                     });
+                                }
+                            }
+                            Mode::Enforcement => {
+                                if has_nearby_annotation || has_guard_validation {
+                                    let gated = guard_enforces(&guards_text, value, target_name)
+                                        || utils::has_plausibility_annotation_above(*line, 1);
+                                    if !gated {
+                                        out.push(Violation {
+                                            rule_no: 12,
+                                            rule_name: "Plausibility Checks".into(),
+                                            line: *line,
+                                            reason: format!(
+                                                "Plausibility present but not enforced before assigning '{}'",
+                                                target_name
+                                            ),
+                                            suggestion: "Use the plausibility result to gate this action (e.g., IF setpointOK THEN assign).".into(),
+                                        });
+                                    }
                                 }
                             }
                         }

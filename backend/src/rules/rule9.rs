@@ -26,8 +26,14 @@ fn walk_for_indexing(stmts: &[Statement], guards: &mut Vec<String>, out: &mut Ve
                 walk_for_indexing(else_branch, guards, out);
                 guards.pop();
             }
-            Statement::Assign { value, line, .. } | Statement::Expr { expr: value, line } => {
+            Statement::Assign { target, value, line, .. } => {
+                // With the improved AST, we can now check both the target (LHS)
+                // and the value (RHS) of an assignment for index violations.
+                find_index_violations(target, *line, guards, out);
                 find_index_violations(value, *line, guards, out);
+            }
+            Statement::Expr { expr, line, .. } => {
+                find_index_violations(expr, *line, guards, out);
             }
             _ => {}
         }

@@ -45,8 +45,10 @@ fn signal_used(stmts: &[Statement], signal: &str) -> bool {
     for st in stmts {
         match st {
             Statement::Assign { target, value, .. } => {
-                if target.name == signal { return true; }
-                if super::utils::expr_text(value).contains(signal) { return true; }
+                if let Expression::VariableRef(target_name) = target {
+                    if target_name == signal { return true; }
+                }
+                if super::utils::expr_text(value).contains(signal) { return true; } // Check RHS
             }
             Statement::IfStmt { condition, then_branch, else_branch, .. } => {
                 if super::utils::expr_text(condition).contains(signal) { return true; }
@@ -73,8 +75,10 @@ fn collect_names(stmts: &[Statement], names: &mut HashSet<String>, lines: &mut V
     for st in stmts {
         match st {
             Statement::Assign { target, line, .. } => {
-                names.insert(target.name.clone());
-                lines.push((target.name.clone(), *line));
+                if let Expression::VariableRef(name) = target {
+                    names.insert(name.clone());
+                    lines.push((name.clone(), *line));
+                }
             }
             Statement::IfStmt { then_branch, else_branch, .. } => {
                 collect_names(then_branch, names, lines);

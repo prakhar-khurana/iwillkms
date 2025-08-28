@@ -104,10 +104,10 @@ pub fn run_all(program: &Program, policy: &Policy) {
     print_res!(10, "Assign designated register blocks", rule10::check(program, policy));
     print_res!(11, "Plausibility Checks", rule11_12::check_rule11(program));
     print_res!(12, "Plausibility Checks", rule11_12::check_rule12(program)); // combined
-    print_res!(15, "Define a safe restart state", rule15::check(program));
+    print_res!(15, "Define a safe restart state", rule15::check(program, policy));
     print_res!(16, "Summarize PLC cycle times", rule16::check(program));
     print_res!(17, "Log PLC uptime", rule17::check(program));
-    print_res!(18, "Log PLC hard stops", rule18::check(program));
+    print_res!(18, "Log PLC hard stops", rule18::check(program, policy));
     print_res!(19, "Monitor PLC memory usage", rule19::check(program));
     print_res!(20, "Trap false alerts", rule20::check(program));
 }
@@ -149,10 +149,10 @@ pub fn run_all_for_wasm(program: &Program, policy: &Policy) -> Vec<WasmRuleResul
     check_and_collect!(10, "Assign designated register blocks", rule10::check(program, policy));
     check_and_collect!(11, "Plausibility Checks", rule11_12::check_rule11(program));
     check_and_collect!(12, "Plausibility Checks", rule11_12::check_rule12(program)); // combined
-    check_and_collect!(15, "Define a safe restart state", rule15::check(program));
+    check_and_collect!(15, "Define a safe restart state", rule15::check(program, policy));
     check_and_collect!(16, "Summarize PLC cycle times", rule16::check(program));
     check_and_collect!(17, "Log PLC uptime", rule17::check(program)); 
-    check_and_collect!(18, "Log PLC hard stops", rule18::check(program));
+    check_and_collect!(18, "Log PLC hard stops", rule18::check(program, policy));
     check_and_collect!(19, "Monitor PLC memory usage", rule19::check(program));
     check_and_collect!(20, "Trap false alerts", rule20::check(program));
     

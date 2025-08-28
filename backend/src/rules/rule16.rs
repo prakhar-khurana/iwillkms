@@ -1,7 +1,7 @@
 //! Rule 16: Summarize PLC cycle times.
 //! Require OB1 to *capture* OB1_PREV_CYCLE and *emit* it to an HMI/DB/LOG tag.
 
-use crate::ast::{FunctionKind, Program, Statement};
+use crate::ast::{Expression, FunctionKind, Program, Statement};
 use super::{RuleResult, Violation, utils::expr_text};
 
 pub fn check(program: &Program) -> RuleResult {
@@ -33,11 +33,13 @@ fn scan(stmts: &[Statement], cap: &mut bool, emit: &mut bool) {
     for st in stmts {
         match st {
             Statement::Assign { target, value, .. } => {
-                let v = expr_text(value).to_ascii_uppercase();
-                let t = target.name.to_ascii_uppercase();
-                if v.contains("OB1_PREV_CYCLE") { *cap = true; }
-                if (t.contains("HMI") || t.contains("DB") || t.contains("LOG")) && v.contains("OB1_PREV_CYCLE") {
-                    *emit = true;
+                if let Expression::VariableRef(target_name) = target {
+                    let v = expr_text(value).to_ascii_uppercase();
+                    let t = target_name.to_ascii_uppercase();
+                    if v.contains("OB1_PREV_CYCLE") { *cap = true; }
+                    if (t.contains("HMI") || t.contains("DB") || t.contains("LOG")) && v.contains("OB1_PREV_CYCLE") {
+                        *emit = true;
+                    }
                 }
             }
             Statement::IfStmt { then_branch, else_branch, .. } => {

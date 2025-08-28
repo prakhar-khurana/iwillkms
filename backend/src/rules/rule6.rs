@@ -30,20 +30,23 @@ fn scan(
     for st in stmts {
         match st {
             Statement::Assign { target, value, line } => {
-                let mut rhs_vars = HashSet::new();
-                collect_vars(value, &mut rhs_vars);
-                let rhs_is_tainted = is_source(value) || rhs_vars.iter().any(|v| tainted.contains(v));
+                if let Expression::VariableRef(target_name) = target {
+                    let target_up = target_name.to_ascii_uppercase();
+                    let mut rhs_vars = HashSet::new();
+                    collect_vars(value, &mut rhs_vars);
+                    let rhs_is_tainted = is_source(value) || rhs_vars.iter().any(|v| tainted.contains(v));
 
-                if rhs_is_tainted {
-                    let annotated = utils::has_plausibility_annotation_above(*line, 3);
-                    let guard_validates = guard_has_range_or_limit(&guard_text);
-                    if annotated || guard_validates {
-                        tainted.remove(&target.name.to_ascii_uppercase());
+                    if rhs_is_tainted {
+                        let annotated = utils::has_plausibility_annotation_above(*line, 3);
+                        let guard_validates = guard_has_range_or_limit(&guard_text);
+                        if annotated || guard_validates {
+                            tainted.remove(&target_up);
+                        } else {
+                            tainted.insert(target_up);
+                        }
                     } else {
-                        tainted.insert(target.name.to_ascii_uppercase());
+                        tainted.remove(&target_up);
                     }
-                } else {
-                    tainted.remove(&target.name.to_ascii_uppercase());
                 }
             }
 
@@ -73,33 +76,77 @@ fn scan(
                 *tainted = accum.union(&else_taint).cloned().collect();
             }
 
+            Statement::Expr { expr, .. } => {
+                // Also scan for timer calls that are standalone expressions
+                scan_expr_for_sinks(expr, tainted, &guard_text, out);
+            }
+
             Statement::Call { name, args, line, .. } => {
                 for (arg_name, arg_value) in args {
-                    let mut arg_vars = HashSet::new();
-                    collect_vars(arg_value, &mut arg_vars);
-                    let arg_is_tainted = is_source(arg_value) || arg_vars.iter().any(|v| tainted.contains(v));
-
-                    if is_timer_preset_sink(name, arg_name) && arg_is_tainted {
-                        let annotated = utils::has_plausibility_annotation_above(*line, 3);
-                        let local_guard = utils::current_guard_text(*line);
-                        let has_range = guard_has_range_or_limit(&local_guard);
-                        if !(annotated || has_range) {
-                            out.push(Violation {
-                                rule_no: 6,
-                                rule_name: "Validate timers and counters",
-                                line: *line,
-                                reason: format!(
-                                    "Timer preset comes from unvalidated source '{}'",
-                                    expr_text(arg_value)
-                                ),
-                                suggestion: "Add a range/plausibility check (or @PlausibilityCheck) before setting timer PT.".into(),
-                            });
-                        }
-                    }
+                    check_timer_sink(name, Some(arg_name), arg_value, *line, tainted, &guard_text, out);
                 }
             }
 
             _ => {}
+        }
+    }
+}
+
+/// Recursively scans an expression for timer calls and checks for tainted presets.
+fn scan_expr_for_sinks(
+    expr: &Expression,
+    tainted: &HashSet<String>,
+    guard_text: &str,
+    out: &mut Vec<Violation>,
+) {
+    match expr {
+        Expression::FuncCall { name, args, line, .. } => {
+            // For positional calls, assume PT is the second argument.
+            if let Some(pt_arg) = args.get(1) {
+                check_timer_sink(name, None, pt_arg, *line, tainted, guard_text, out);
+            }
+            // Recurse into arguments
+            for arg in args {
+                scan_expr_for_sinks(arg, tainted, guard_text, out);
+            }
+        }
+        Expression::BinaryOp { left, right, .. } => {
+            scan_expr_for_sinks(left, tainted, guard_text, out);
+            scan_expr_for_sinks(right, tainted, guard_text, out);
+        }
+        Expression::Index { base, index, .. } => {
+            scan_expr_for_sinks(base, tainted, guard_text, out);
+            scan_expr_for_sinks(index, tainted, guard_text, out);
+        }
+        _ => {}
+    }
+}
+
+/// Centralized logic to check if a timer argument is a tainted sink.
+fn check_timer_sink(
+    call_name: &str,
+    arg_name: Option<&str>,
+    arg_value: &Expression,
+    line: usize,
+    tainted: &HashSet<String>,
+    guard_text: &str,
+    out: &mut Vec<Violation>,
+) {
+    let mut arg_vars = HashSet::new();
+    collect_vars(arg_value, &mut arg_vars);
+    let arg_is_tainted = is_source(arg_value) || arg_vars.iter().any(|v| tainted.contains(v));
+
+    if is_timer_preset_sink(call_name, arg_name) && arg_is_tainted {
+        let annotated = utils::has_plausibility_annotation_above(line, 3);
+        let has_range = guard_has_range_or_limit(guard_text);
+        if !(annotated || has_range) {
+            out.push(Violation {
+                rule_no: 6,
+                rule_name: "Validate timers and counters",
+                line,
+                reason: format!("Timer preset comes from unvalidated source '{}'", expr_text(arg_value)),
+                suggestion: "Add a range/plausibility check (or @PlausibilityCheck) before setting timer PT.".into(),
+            });
         }
     }
 }
@@ -110,10 +157,15 @@ fn is_source(e: &Expression) -> bool {
     vars.iter().any(|v| utils::is_sensitive_variable(v))
 }
 
-fn is_timer_preset_sink(call_name: &str, arg_name: &str) -> bool {
+fn is_timer_preset_sink(call_name: &str, arg_name: Option<&str>) -> bool {
     let call_up = call_name.to_ascii_uppercase();
-    let arg_up = arg_name.to_ascii_uppercase();
-    (call_up.ends_with("TP") || call_up.ends_with("TON") || call_up.ends_with("TOF")) && arg_up == "PT"
+    let is_timer = call_up.ends_with("TP") || call_up.ends_with("TON") || call_up.ends_with("TOF");
+
+    if !is_timer { return false; }
+
+    // If arg_name is Some, we have a named argument. Check if it's "PT".
+    // If arg_name is None, it's a positional call, which we assume is a sink.
+    arg_name.map_or(true, |n| n.to_ascii_uppercase() == "PT")
 }
 
 fn collect_vars(e: &Expression, out: &mut HashSet<String>) {

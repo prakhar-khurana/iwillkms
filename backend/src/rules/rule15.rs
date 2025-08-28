@@ -2,9 +2,15 @@
 //! Verify non-empty OB100 exists and critical outputs are initialized to a safe value (FALSE/0).
 
 use crate::ast::{Expression, FunctionKind, Program, Statement};
-use super::{RuleResult, Violation};
+use super::{Policy, RuleResult, Violation};
 
-pub fn check(program: &Program) -> RuleResult {
+pub fn check(program: &Program, policy: &Policy) -> RuleResult {
+    // This is an S7-specific rule. Only run if the platform is configured as S7.
+    let is_s7 = policy.platform.as_deref().unwrap_or("").eq_ignore_ascii_case("S7");
+    if !is_s7 {
+        return RuleResult::ok(15, "Define a safe restart state");
+    }
+
     let mut violations = Vec::new();
 
     let ob100 = program.functions.iter().find(|f| f.kind == FunctionKind::OB100);
@@ -68,12 +74,13 @@ fn walk_ob100(
     for st in stmts {
         match st {
             Statement::Assign { target, value, line } => {
-                let name = &target.name;
-                if looks_like_critical_output(name) {
-                    if is_safe_expr(value) {
-                        safe_inits.push((*line, name.clone()));
-                    } else if is_unsafe_expr(value) {
-                        unsafe_inits.push((*line, name.clone()));
+                if let Expression::VariableRef(name) = target {
+                    if looks_like_critical_output(name) {
+                        if is_safe_expr(value) {
+                            safe_inits.push((*line, name.clone()));
+                        } else if is_unsafe_expr(value) {
+                            unsafe_inits.push((*line, name.clone()));
+                        }
                     }
                 }
             }

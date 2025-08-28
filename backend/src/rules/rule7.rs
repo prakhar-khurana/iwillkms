@@ -37,13 +37,15 @@ fn find_concurrent_activations(
 
         match st {
             Statement::Assign { target, value, line } => {
-                let target_up = target.name.to_ascii_uppercase();
-                let is_true = is_true_expr(value);
+                if let Expression::VariableRef(target_name) = target {
+                    let target_up = target_name.to_ascii_uppercase();
+                    let is_true = is_true_expr(value);
 
-                if &target_up == a_up {
-                    if is_true { active_signals.insert(a_up.clone()); } else { active_signals.remove(a_up); }
-                } else if &target_up == b_up {
-                    if is_true { active_signals.insert(b_up.clone()); } else { active_signals.remove(b_up); }
+                    if &target_up == a_up {
+                        if is_true { active_signals.insert(a_up.clone()); } else { active_signals.remove(a_up); }
+                    } else if &target_up == b_up {
+                        if is_true { active_signals.insert(b_up.clone()); } else { active_signals.remove(b_up); }
+                    }
                 }
 
                 if active_signals.contains(a_up) && active_signals.contains(b_up) {
