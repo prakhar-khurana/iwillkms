@@ -22,7 +22,7 @@ pub fn parse_plcopen(path: &Path) -> Result<Program, String> {
 pub fn parse_plcopen_from_str(src: &str) -> Result<Program, String> {
     let mut reader = Reader::from_str(src);
     reader.config_mut().trim_text(true);
-
+    reader.config_mut().expand_empty_elements = false;
     let mut buf = Vec::new();
     let mut program = Program { functions: vec![] };
     let mut current_func: Option<Function> = None;
@@ -104,8 +104,8 @@ pub fn parse_plcopen_from_str(src: &str) -> Result<Program, String> {
                     }
                 }
             }
-            Err(e) => {
-                return Err(format!("XML parse error: {e}"));
+             Err(e) => {
+                return Err(format!("XML parse error at position {}: {}", reader.buffer_position(), e));
             }
             _ => {}
         }

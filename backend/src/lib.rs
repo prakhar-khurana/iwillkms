@@ -14,6 +14,23 @@ use crate::rules::Policy;
 // This is the function that JavaScript will call
 #[wasm_bindgen]
 pub fn check_plc_code(source_code: &str, policy_json: &str, file_name: &str) -> String {
+    // Validate inputs
+    if source_code.trim().is_empty() {
+        let err_result = vec![rules::WasmRuleResult {
+            status: "ERROR".into(),
+            rule_no: 0,
+            rule_name: "Input Error",
+            violation: Some(rules::Violation {
+                rule_no: 0,
+                rule_name: "Input Error",
+                line: 0,
+                reason: "Empty source code provided".into(),
+                suggestion: "Provide valid PLC source code.".into(),
+            }),
+        }];
+        return serde_json::to_string(&err_result).unwrap_or_else(|_| "[]".into());
+    }
+
     // 1. Parse the PLC program using the appropriate frontend based on file_name
     let program = match parser::parse_file_from_str(source_code, file_name) {
         Ok(p) => p,
@@ -34,7 +51,6 @@ pub fn check_plc_code(source_code: &str, policy_json: &str, file_name: &str) -> 
             return serde_json::to_string(&err_result).unwrap_or_else(|_| "[]".into());
         }
     };
-
     // 2. Parse the custom policy JSON. If parsing fails, record an error and
     // continue with a default/empty policy to avoid crashing.
     let mut policy = Policy::default();

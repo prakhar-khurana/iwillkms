@@ -36,31 +36,31 @@ pub fn check(program: &Program, policy: &Policy) -> RuleResult {
 
 // Very simple parser for addresses like %MW100, %DB1.DBX10.0, %M100 etc.
 fn parse_mem_address(s: &str) -> Option<(String, i64)> {
-    if !s.starts_with('%') {
+    if !s.starts_with('%') || s.len() < 3 {  // Add length check
         return None;
     }
     let mut area = String::new();
     let mut num = String::new();
-    let mut seen_area = false;
+    let mut seen_digit = false;
+    
     for ch in s.chars().skip(1) {
-        if ch.is_ascii_alphabetic() {
-            if !seen_area { area.push('%'); }
+        if ch.is_ascii_alphabetic() && !seen_digit {
             area.push(ch);
-            seen_area = true;
         } else if ch.is_ascii_digit() {
             num.push(ch);
-        } else {
-            if !num.is_empty() { break; }
+            seen_digit = true;
+        } else if ch == '.' && seen_digit {
+            break; // Stop at first dot after seeing digits
         }
     }
-    if area.len() > 1 && !num.is_empty() {
+    
+    if !area.is_empty() && !num.is_empty() {
         if let Ok(n) = num.parse::<i64>() {
-            return Some((area, n));
+            return Some((format!("%{}", area), n));
         }
     }
     None
 }
-
 trait Applies {
     fn applies(&self, area: &str, addr: i64) -> bool;
 }

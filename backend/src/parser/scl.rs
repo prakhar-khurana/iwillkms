@@ -350,10 +350,12 @@ fn strip_inline_comment(line: &str) -> String {
         s.truncate(i);
     }
     if let (Some(a), Some(b)) = (s.find("(*"), s.find("*)")) {
-        if a < b {
+        if a < b && b+2 <= s.len() {
             let mut t = String::new();
             t.push_str(&s[..a]);
-            t.push_str(&s[b + 2..]);
+            if b + 2 < s.len() {  // Check bounds before slicing
+                t.push_str(&s[b + 2..]);
+            }
             s = t;
         }
     }
@@ -447,7 +449,7 @@ fn tokenize(mut s: &str) -> Vec<Tok<'_>> {
         if "+-*/=<>()".contains(c) {
             out.push(Tok::Op(&s[..1])); s = &s[1..]; continue;
         }
-
+        if c == ',' { out.push(Tok::Comma); s = &s[1..]; continue; }
         // identifiers / keywords
         let len = s
             .chars()
@@ -518,6 +520,9 @@ fn parse_expr(text: &str, line: usize) -> Expression {
         line: usize,
         original_text: &str,
     ) -> Expression {
+        if *i >= toks.len() {  // Add bounds check
+        return Expression::VariableRef(original_text.trim().to_string());
+        }
         match toks.get(*i) {
             Some(Tok::Number(n)) => {
                 *i += 1;

@@ -41,34 +41,39 @@ fn cyclomatic_complexity(stmts: &[Statement]) -> usize {
 }
 
 fn count_branches(stmts: &[Statement]) -> usize {
+    count_branches_with_depth(stmts, 0)
+}
+
+fn count_branches_with_depth(stmts: &[Statement], depth: usize) -> usize {
+    if depth > 100 {  // Prevent stack overflow
+        return 0;
+    }
+    
     let mut c = 0usize;
     for st in stmts {
         match st {
             Statement::IfStmt { then_branch, else_branch, .. } => {
                 c += 1;
-                c += count_branches(then_branch);
+                c += count_branches_with_depth(then_branch, depth + 1);
                 if !else_branch.is_empty() {
-                    c += count_branches(else_branch);
+                    c += count_branches_with_depth(else_branch, depth + 1);
                 }
             }
             Statement::CaseStmt { cases, else_branch, .. } => {
-                // Each case is a branch. If there's an ELSE, it's also a branch.
                 c += cases.len();
                 if !else_branch.is_empty() {
                     c += 1;
                 }
-                // Recursively count branches within each case
                 for (_, branch) in cases {
-                    c += count_branches(branch);
+                    c += count_branches_with_depth(branch, depth + 1);
                 }
-                c += count_branches(else_branch);
+                c += count_branches_with_depth(else_branch, depth + 1);
             }
             _ => {}
         }
     }
     c
 }
-
 fn statement_count(stmts: &[Statement]) -> usize {
     let mut n = 0usize;
     for st in stmts {
