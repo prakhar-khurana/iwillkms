@@ -1,0 +1,66 @@
+// --------------------- OB100: Safe restart (Rule 15 OK) ---------------------
+ORGANIZATION_BLOCK OB100
+BEGIN
+    // Initialize critical outputs to a safe state
+    Critical_Motor_Out := FALSE;
+    Safe_Output := 0;
+END_ORGANIZATION_BLOCK
+
+// --------------------- OB1: Main cycle (mix of OK / violations) ------------
+ORGANIZATION_BLOCK OB1
+BEGIN
+    // Rule 16 OK: move previous cycle time to HMI tag
+    HMI_OB1_CYCLE := OB1_PREV_CYCLE;
+
+    // Rule 2 OK: alarm when not in RUN (RUN usually 8)
+    IF CPU_MODE <> 8 THEN
+        System_Alarm := TRUE;
+    END_IF;
+
+    // Rule 4 VIOLATION: division without SW flag checks
+    Ratio := A / B;
+
+    // Rule 4 OK: guarded division with SW checks
+    IF SW.OV = 0 AND SW.OS = 0 THEN
+        SafeRatio := A / B;
+    END_IF;
+
+    // Rule 9 OK: array index bounds checked before use
+    IF Index >= 1 AND Index <= 10 THEN
+        Val := MyArray[Index];
+    END_IF;
+
+    // Rule 11 & 12 VIOLATION + Rule 8 VIOLATION:
+    // HMI-accessible DB variable used without plausibility comment / range check
+    Motor_Spd := HMI_Speed;
+
+    // Rule 7 VIOLATION: paired IO both commanded TRUE
+    Motor_Fwd := TRUE;
+    Motor_Rev := TRUE;
+
+    // Rule 10 VIOLATION (with policy): write to read-only memory area
+    %MW150 := 123;
+END_ORGANIZATION_BLOCK
+
+// --------------------- OB121/OB82/OB86: Fault OBs (Rule 18 OK) -------------
+ORGANIZATION_BLOCK OB121
+BEGIN
+    Diag_ProgErr := TRUE;
+END_ORGANIZATION_BLOCK
+
+ORGANIZATION_BLOCK OB82
+BEGIN
+    Diag_DiagInt := TRUE;
+END_ORGANIZATION_BLOCK
+
+ORGANIZATION_BLOCK OB86
+BEGIN
+    Diag_RackFailure := TRUE;
+END_ORGANIZATION_BLOCK
+
+// --------------------- FB1: Example FB (Rule 6 VIOLATION) ------------------
+FUNCTION_BLOCK FB1
+BEGIN
+    // Timer preset sourced from HMI DB without a preceding range check
+    Timer_Preset := HMI_DB.TimerSet;
+END_FUNCTION_BLOCK

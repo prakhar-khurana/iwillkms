@@ -1,0 +1,8 @@
+{
+  "pairs": [
+    ["Motor_Fwd", "Motor_Rev"]
+  ],
+  "memory_areas": [
+    { "address": "%MW100-%MW200", "access": "ReadOnly" }
+  ]
+}

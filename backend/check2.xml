@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://www.plcopen.org/xml/tc6_0201">
+  <types>
+    <pous>
+      <!-- Program OB1 with calls to exercise Rule 5, 17, 19 (likely NOT FOLLOWED) -->
+      <pou name="OB1" pouType="program">
+        <interface/>
+        <body>
+          <FBD>
+            <network>
+              <block name="GetChecksum"/>
+              <block name="RD_SINFO"/>
+              <block name="TEST_DB"/>
+            </network>
+          </FBD>
+        </body>
+      </pou>
+
+      <!-- A simple FB that assigns a variable (OK just for parsing) -->
+      <pou name="FB_Monitor" pouType="functionBlock">
+        <interface/>
+        <body>
+          <ST>
+            <variable name="Heartbeat"><value>TRUE</value></variable>
+          </ST>
+        </body>
+      </pou>
+
+      <!-- OB100 present to help Rule 15 when using XML (OK) -->
+      <pou name="OB100" pouType="program">
+        <interface/>
+        <body>
+          <ST>
+            <variable name="Critical_Motor_Out"><value>FALSE</value></variable>
+          </ST>
+        </body>
+      </pou>
+    </pous>
+  </types>
+</project>

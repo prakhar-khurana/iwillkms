@@ -1,0 +1,27 @@
+# Rust build artifacts
+target/
+backend/target/
+backend/pkg/
+
+# Node dependencies
+node_modules/
+frontend/node_modules/
+
+# Build output
+dist/
+frontend/dist/
+
+# Keep wasm bindings for the frontend
+!frontend/wasm/
+!frontend/wasm/*.js
+!frontend/wasm/*.wasm
+
+# Logs
+npm-debug.log*
+
+# OS & editor cruft
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
