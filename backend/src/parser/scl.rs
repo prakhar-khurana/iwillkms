@@ -58,13 +58,10 @@ pub fn parse_scl_from_str(src: &str) -> Result<Program, String> {
             continue;
         }
         
-        // The rest of the parsing loop uses a line with inline comments removed
-        let line_no_comment = if let Some(i) = raw.find("//") {
-            raw[..i].to_string()
-        } else {
-            raw.to_string()
-        };
-        let line = line_no_comment.trim();
+        // The rest of the parsing loop uses a line with comments removed
+        // Use strip_inline_comment so both // and (* *) inline comments are removed
+        let line_clean = strip_inline_comment(raw);
+        let line = line_clean.trim();
 
 
         // Block starts
@@ -244,21 +241,25 @@ pub fn parse_scl_from_str(src: &str) -> Result<Program, String> {
                        last_case.1.append(&mut current_statements);
                        current_statements.clear();
                     }
-                    let (labels_str, _) = split_once(body_line, ":").unwrap();
-                    let labels = labels_str.split(',')
+                    if let Some((labels_str, _)) = split_once(body_line, ":") {
+                        let labels = labels_str.split(',')
                         .map(|s| parse_expr(s.trim(), line_no))
-                        .collect();
+                        .collect::<Vec<_>>();
                     all_cases.push((labels, vec![]));
-                } else if !body_line.is_empty() {
-                    // This line must be a statement within the current case
-                    // For simplicity, we'll assume basic assignments for now.
+                } }else if !body_line.is_empty() {
+                    // Statement within the current case: support assignments and calls
                     if body_line.contains(":=") {
-                         let (lhs, rhs) = split_once(&body_line, ":=").unwrap_or((body_line, ""));
-                         current_statements.push(Statement::Assign {
+                        let (lhs, rhs) = split_once(&body_line, ":=").unwrap_or((body_line, ""));
+                        current_statements.push(Statement::Assign {
                             target: Variable { name: lhs.trim().to_string() },
                             value: parse_expr(rhs.trim_end_matches(';'), line_no),
                             line: line_no,
                         });
+                    } else if looks_like_call(body_line) {
+                        let (name, args_str) = split_once(&body_line, "(").unwrap_or((body_line, ""));
+                        let name = name.trim().to_string();
+                        let args = parse_call_args(args_str, line_no);
+                        current_statements.push(Statement::Call { name, args, line: line_no });
                     }
                 }
             }
@@ -363,8 +364,10 @@ fn strip_inline_comment(line: &str) -> String {
 }
 
 fn looks_like_call(line: &str) -> bool {
-    let t = line.trim();
-    t.contains('(') && t.trim_end().ends_with(");")
+    let cleaned = strip_inline_comment(line);
+    let t = cleaned.trim();
+    // Accept calls that end with ");" possibly followed by whitespace
+    t.contains('(') && t.ends_with(");")
 }
 
 /// Extract an indexing expression from a raw line if present, otherwise return None.
@@ -390,9 +393,11 @@ fn extract_index_expr(line: &str, line_no: usize) -> Option<Expression> {
 /// e.g., "IN := 1, PT := REAL_TO_TIME(gMainLogic.par.recipe.milk * 10))"
 fn parse_call_args(args_str: &str, line_no: usize) -> Vec<(String, Expression)> {
     let mut args = Vec::new();
-    // Simple split on comma; doesn't handle nested function calls as args perfectly
-    // but works for the common case.
-    let cleaned_args = args_str.trim_end_matches(';').trim_end_matches(')');
+    // Strip to the matching closing paren for robustness
+    let mut cleaned = args_str.trim();
+    if let Some(rp) = cleaned.rfind(')') { cleaned = &cleaned[..rp]; }
+    if let Some(lp) = cleaned.find('(') { cleaned = &cleaned[lp+1..]; }
+    let cleaned_args = cleaned.trim_end_matches(';');
 
     for part in cleaned_args.split(',') {
         if let Some((name, value_str)) = split_once(part, ":=") {

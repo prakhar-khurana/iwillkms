@@ -3,35 +3,23 @@
 //! evidence of a checksum/CRC comparison that can raise an alarm.
 
 use crate::ast::{Expression, Program, Statement};
-use super::{RuleResult, Violation, utils::expr_text}; // Use central utility
+use super::{RuleResult, Violation, utils}; // Use central utility
 
 pub fn check(program: &Program) -> RuleResult {
-    let mut violations = vec![];
-
     for f in &program.functions {
-        let mut sensitive_usage_line: Option<usize> = None;
-        
-        // First, determine if sensitive data is used anywhere in this function.
-        if function_uses_sensitive_data(&f.statements) {
-            sensitive_usage_line = Some(f.line); // Report at the function level for now
-        }
-
-        // If it is, then check if the same function performs an integrity check.
-        if let Some(line) = sensitive_usage_line {
-            if !has_integrity_check(&f.statements) {
-                violations.push(Violation {
-                    rule_no: 5,
-                    rule_name: "Use checksum integrity checks",
-                    line,
-                    reason: "Function uses recipe/parameter data without a visible integrity check.".into(),
-                    suggestion: "Verify a checksum/CRC for recipe data and raise an alarm on mismatch before using the data.".into(),
-                });
-            }
+        if function_uses_sensitive_data(&f.statements) && !has_integrity_check(&f.statements) {
+            return RuleResult::violations(vec![Violation {
+                rule_no: 5,
+                rule_name: "Use checksum integrity checks",
+                line: f.line,
+                reason: format!("Function '{}' uses recipe/parameter data without a visible integrity check.", f.name),
+                suggestion: "Verify a checksum/CRC for recipe data and raise an alarm on mismatch before using the data.".into(),
+            }]);
         }
     }
-
-    RuleResult::violations(violations)
+    RuleResult::ok(5, "Use checksum integrity checks")
 }
+
 
 fn function_uses_sensitive_data(stmts: &[Statement]) -> bool {
     for st in stmts {
@@ -47,6 +35,12 @@ fn function_uses_sensitive_data(stmts: &[Statement]) -> bool {
                 if function_uses_sensitive_data(then_branch) { return true; }
                 if function_uses_sensitive_data(else_branch) { return true; }
             }
+            Statement::CaseStmt { cases, else_branch, .. } => {
+                for (_, case_stmts) in cases {
+                    if function_uses_sensitive_data(case_stmts) { return true; }
+                }
+                if function_uses_sensitive_data(else_branch) { return true; }
+            }
             _ => {}
         }
     }
@@ -56,28 +50,26 @@ fn function_uses_sensitive_data(stmts: &[Statement]) -> bool {
 fn expr_contains_sensitive_vars(e: &Expression) -> bool {
     let mut vars = Vec::new();
     find_vars(e, &mut vars);
-    vars.iter().any(|v| {
-        let up = v.to_ascii_uppercase();
-        up.contains("RECIPE") || up.contains("PARAMETER") || up.contains(".PAR.")
-    })
+    vars.iter().any(|v| utils::is_sensitive_variable(v))
 }
 
 fn has_integrity_check(stmts: &[Statement]) -> bool {
     for st in stmts {
         if let Statement::IfStmt { condition, then_branch, .. } = st {
-            let c = expr_text(condition).to_ascii_uppercase();
-            if (c.contains("CHECKSUM") || c.contains("CRC")) && (c.contains("<>") || c.contains("!=")) {
-                // Check if the THEN branch sets an alarm
-                if then_branch.iter().any(|s| {
-                    if let Statement::Assign { target, .. } = s {
-                        return target.name.to_ascii_uppercase().contains("ALARM");
-                    }
-                    false
-                }) {
-                    return true;
-                }
-            }
+            let c = utils::expr_text(condition).to_ascii_uppercase();
+            let mentions_sens = c.contains("CHECKSUM") || c.contains("CRC");
+            let is_compare = c.contains("<>") || c.contains("!=");
+            let sets_alarm = then_branch.iter().any(|s| matches!(s,
+                Statement::Assign { target, .. } if target.name.to_ascii_uppercase().contains("ALARM")
+            ));
+            if mentions_sens && is_compare && sets_alarm { return true; }
             if has_integrity_check(then_branch) { return true; }
+        }
+        if let Statement::CaseStmt { cases, else_branch, .. } = st {
+            for (_, case_stmts) in cases {
+                if has_integrity_check(case_stmts) { return true; }
+            }
+            if has_integrity_check(else_branch) { return true; }
         }
     }
     false

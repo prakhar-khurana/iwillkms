@@ -1,38 +1,54 @@
 //! Rule 16: Summarize PLC cycle times.
-//! Verify that if OB1 exists, it reads OB1_PREV_CYCLE and moves it to an HMI tag.
+//! Require OB1 to *capture* OB1_PREV_CYCLE and *emit* it to an HMI/DB/LOG tag.
 
-use crate::ast::{Program, Statement, FunctionKind}; // Cleaned up use statements
-use super::{RuleResult, Violation, utils::expr_text}; // Import the central utility
+use crate::ast::{FunctionKind, Program, Statement};
+use super::{RuleResult, Violation, utils::expr_text};
 
 pub fn check(program: &Program) -> RuleResult {
     let ob1 = program.functions.iter().find(|f| f.kind == FunctionKind::OB1);
-
     if let Some(f) = ob1 {
-        let mut moved_to_hmi = false;
-        for st in &f.statements {
-            if let Statement::Assign { target, value, .. } = st {
-                let val_txt = expr_text(value).to_ascii_uppercase();
-                let tgt_txt = target.name.to_ascii_uppercase();
-                
-                if val_txt.contains("OB1_PREV_CYCLE") && (tgt_txt.contains("HMI") || tgt_txt.contains("CYCLE")) {
-                    moved_to_hmi = true;
-                    break;
-                }
-            }
-        }
+        // Scan recursively: capture (source) + emit (sink)
+        let mut has_capture = false;
+        let mut has_emit = false;
+        scan(&f.statements, &mut has_capture, &mut has_emit);
 
-        if !moved_to_hmi {
-            return RuleResult::violations(vec![Violation {
+        if has_capture && has_emit {
+            RuleResult::ok(16, "Summarize PLC cycle times")
+        } else {
+            RuleResult::violations(vec![Violation {
                 rule_no: 16,
                 rule_name: "Summarize PLC cycle times",
                 line: f.line,
-                reason: "Cycle time is not read from OB1_PREV_CYCLE and reported for monitoring".into(),
-                suggestion: "In OB1, add logic like 'HMI_CycleTime := OB1_PREV_CYCLE;'.".into(),
-            }]);
+                reason: "Cycle-time summary incomplete (capture+emit not both present)".into(),
+                suggestion: "In OB1, move OB1_PREV_CYCLE into an HMI/DB/LOG tag (e.g., HMI_CycleTime := OB1_PREV_CYCLE).".into(),
+            }])
         }
+    } else {
+        // No OB1? Treat as OK for portability (or change to WARN/NOT FOLLOWED per policy)
+        RuleResult::ok(16, "Summarize PLC cycle times")
     }
-
-    RuleResult::ok(16, "Summarize PLC cycle times")
 }
 
-// The local expr_text function has been removed.
+fn scan(stmts: &[Statement], cap: &mut bool, emit: &mut bool) {
+    for st in stmts {
+        match st {
+            Statement::Assign { target, value, .. } => {
+                let v = expr_text(value).to_ascii_uppercase();
+                let t = target.name.to_ascii_uppercase();
+                if v.contains("OB1_PREV_CYCLE") { *cap = true; }
+                if (t.contains("HMI") || t.contains("DB") || t.contains("LOG")) && v.contains("OB1_PREV_CYCLE") {
+                    *emit = true;
+                }
+            }
+            Statement::IfStmt { then_branch, else_branch, .. } => {
+                scan(then_branch, cap, emit);
+                scan(else_branch, cap, emit);
+            }
+            Statement::CaseStmt { cases, else_branch, .. } => {
+                for (_, body) in cases { scan(body, cap, emit); }
+                scan(else_branch, cap, emit);
+            }
+            _ => {}
+        }
+    }
+}

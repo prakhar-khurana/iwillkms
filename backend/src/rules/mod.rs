@@ -10,7 +10,7 @@ pub mod rule1;
 pub mod rule2;
 pub mod rule4;
 pub mod rule5;
-// pub mod rule6;
+pub mod rule6;
 pub mod rule7;
 pub mod rule8;
 pub mod rule9;
@@ -97,13 +97,13 @@ pub fn run_all(program: &Program, policy: &Policy) {
     print_res!(2,  "Track operating modes", rule2::check(program));
     print_res!(4,  "Use PLC flags as integrity checks", rule4::check(program));
     print_res!(5,  "Use checksum integrity checks", rule5::check(program));
-    // print_res!(6,  "Validate timers and counters", rule6::check(program));
+    print_res!(6,  "Validate timers and counters", rule6::check(program));
     print_res!(7,  "Validate paired inputs/outputs", rule7::check(program, policy));
     print_res!(8,  "Validate HMI input variables", rule8::check(program));
     print_res!(9,  "Validate indirections", rule9::check(program));
     print_res!(10, "Assign designated register blocks", rule10::check(program, policy));
-    print_res!(11, "Plausibility Checks", rule11_12::check(program));
-    print_res!(12, "Plausibility Checks", rule11_12::check(program)); // combined
+    print_res!(11, "Plausibility Checks", rule11_12::check_rule11(program));
+    print_res!(12, "Plausibility Checks", rule11_12::check_rule12(program)); // combined
     print_res!(15, "Define a safe restart state", rule15::check(program));
     print_res!(16, "Summarize PLC cycle times", rule16::check(program));
     print_res!(17, "Log PLC uptime", rule17::check(program));
@@ -142,19 +142,13 @@ pub fn run_all_for_wasm(program: &Program, policy: &Policy) -> Vec<WasmRuleResul
     check_and_collect!(2, "Track operating modes", rule2::check(program));
     check_and_collect!(4, "Use PLC flags as integrity checks", rule4::check(program));
     check_and_collect!(5, "Use checksum integrity checks", rule5::check(program));
-    // check_and_collect!(6, "Validate timers and counters", rule6::check(program));
-    all_results.push(WasmRuleResult {
-        status: "OK".to_string(),
-        rule_no: 6,
-        rule_name: "Validate timers and counters",
-        violation: None,
-    });
+    check_and_collect!(6, "Validate timers and counters", rule6::check(program));
     check_and_collect!(7, "Validate paired inputs/outputs", rule7::check(program, policy));
     check_and_collect!(8, "Validate HMI input variables", rule8::check(program));
     check_and_collect!(9, "Validate indirections", rule9::check(program));
     check_and_collect!(10, "Assign designated register blocks", rule10::check(program, policy));
-    check_and_collect!(11, "Plausibility Checks", rule11_12::check(program));
-    check_and_collect!(12, "Plausibility Checks", rule11_12::check(program)); // combined
+    check_and_collect!(11, "Plausibility Checks", rule11_12::check_rule11(program));
+    check_and_collect!(12, "Plausibility Checks", rule11_12::check_rule12(program)); // combined
     check_and_collect!(15, "Define a safe restart state", rule15::check(program));
     check_and_collect!(16, "Summarize PLC cycle times", rule16::check(program));
     check_and_collect!(17, "Log PLC uptime", rule17::check(program)); 

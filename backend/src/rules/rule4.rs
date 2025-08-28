@@ -19,12 +19,14 @@ fn collect_div_violations(stmts: &[Statement], guarded: bool, out: &mut Vec<Viol
     for st in stmts {
         match st {
             Statement::IfStmt { condition, then_branch, else_branch, .. } => {
-                let cond_txt = expr_text(condition).to_ascii_uppercase();
-                let has_guard = cond_txt.contains("SW.") && (cond_txt.contains("OV=0") || cond_txt.contains("OS=0"));
-                // The guard only applies to the THEN branch. The ELSE branch is NOT guarded.
-                collect_div_violations(then_branch, guarded || has_guard, out);
-                collect_div_violations(else_branch, guarded, out); // Pass original `guarded` state
+                let cond = expr_text(condition).to_ascii_uppercase();
+                let sw_guard = cond.contains("SW.") && cond.contains("OV=0") && cond.contains("OS=0");
+                let zero_guard = cond.contains("<>0") || cond.contains("!=0");
+                let guarded_then = sw_guard && zero_guard;
+                collect_div_violations(then_branch, guarded || guarded_then, out);
+                collect_div_violations(else_branch, guarded, out);
             }
+
             Statement::Assign { value, line, .. } | Statement::Expr { expr: value, line } => {
                 find_divs(value, *line, guarded, out);
             }

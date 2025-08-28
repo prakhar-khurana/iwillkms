@@ -1,6 +1,8 @@
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+
 pub struct Policy {
     /// Pairs for Rule 7 that must not be active simultaneously.
     pub pairs: Option<Vec<[String; 2]>>,
@@ -9,6 +11,7 @@ pub struct Policy {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct MemoryArea {
     /// Address range, e.g. "%MW100-%MW200"
     pub address: String,

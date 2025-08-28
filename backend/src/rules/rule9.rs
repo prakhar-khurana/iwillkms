@@ -40,8 +40,9 @@ fn find_index_violations(e: &Expression, line: usize, guards: &Vec<String>, out:
             let idx_txt = expr_text(index);
             let idx_up = idx_txt.to_ascii_uppercase();
             let guarded = guards.iter().any(|g| {
-                let gup = g.to_ascii_uppercase();
-                gup.contains(&idx_up) && (gup.contains('<') || gup.contains('>') || gup.contains("BOUND") || gup.contains("LIMIT"))
+                let g = g.replace(' ', "").to_ascii_uppercase();
+                let idx = idx_up.replace(' ', "");
+                (g.contains(&idx) && (g.contains("<") || g.contains("<=") || g.contains("BOUND") || g.contains("LIMIT")))|| g.contains(&format!("NOT({}>", idx)) // simple negated form
             });
             if !guarded && matches!(**index, Expression::VariableRef(_)) {
                 out.push(Violation {

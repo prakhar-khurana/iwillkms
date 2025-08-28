@@ -46,7 +46,7 @@ fn count_branches(stmts: &[Statement]) -> usize {
 
 fn count_branches_with_depth(stmts: &[Statement], depth: usize) -> usize {
     if depth > 100 {  // Prevent stack overflow
-        return 0;
+        return 51;
     }
     
     let mut c = 0usize;

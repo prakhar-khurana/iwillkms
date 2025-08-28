@@ -1,34 +1,37 @@
 //! Rule 20: Trap false alerts.
-//! For any variable named `Critical_Alert_*`, verify existence/usage of
-//! `Critical_Alert_*_False_Negative` and `_False_Positive`.
+//! For each Critical_Alert_* signal, require existence *and usage* of
+//! Critical_Alert_*_False_Negative and Critical_Alert_*_False_Positive.
 
-use crate::ast::{Program, Statement};
+use crate::ast::{Program, Statement, Expression};
 use super::{RuleResult, Violation};
+use std::collections::HashSet;
 
 pub fn check(program: &Program) -> RuleResult {
     let mut violations = vec![];
 
     for f in &program.functions {
-        // Gather names seen
-        let mut names: Vec<String> = vec![];
-        let mut lines: Vec<(String, usize)> = vec![];
+        let mut names = HashSet::new();
+        let mut lines = vec![];
         collect_names(&f.statements, &mut names, &mut lines);
 
         for (name, ln) in lines {
             if let Some(prefix) = name.strip_prefix("Critical_Alert_") {
+                if prefix.ends_with("_False_Negative") || prefix.ends_with("_False_Positive") {
+                    continue;
+                }
                 let fn_var = format!("Critical_Alert_{}_False_Negative", prefix);
                 let fp_var = format!("Critical_Alert_{}_False_Positive", prefix);
 
-                let has_fn = names.iter().any(|n| n == &fn_var);
-                let has_fp = names.iter().any(|n| n == &fp_var);
+                let have_both = names.contains(&fn_var) && names.contains(&fp_var);
+                let used_both = signal_used(&f.statements, &fn_var) && signal_used(&f.statements, &fp_var);
 
-                if !(has_fn && has_fp) {
+                if !(have_both && used_both) {
                     violations.push(Violation {
                         rule_no: 20,
                         rule_name: "Trap false alerts",
                         line: ln,
-                        reason: format!("Missing trap variables '{}' or '{}'", fn_var, fp_var),
-                        suggestion: "Implement self-checking pattern with both false-negative and false-positive traps.".into(),
+                        reason: format!("Missing or unused trap variables for '{}'", name),
+                        suggestion: "Define and wire both *_False_Negative and *_False_Positive signals into logic/logs.".into(),
                     });
                 }
             }
@@ -38,23 +41,51 @@ pub fn check(program: &Program) -> RuleResult {
     RuleResult::violations(violations)
 }
 
-fn collect_names(stmts: &[Statement], names: &mut Vec<String>, lines: &mut Vec<(String, usize)>) {
+fn signal_used(stmts: &[Statement], signal: &str) -> bool {
+    for st in stmts {
+        match st {
+            Statement::Assign { target, value, .. } => {
+                if target.name == signal { return true; }
+                if super::utils::expr_text(value).contains(signal) { return true; }
+            }
+            Statement::IfStmt { condition, then_branch, else_branch, .. } => {
+                if super::utils::expr_text(condition).contains(signal) { return true; }
+                if signal_used(then_branch, signal) || signal_used(else_branch, signal) { return true; }
+            }
+            // labels are Vec<Expression>; check each label's text
+            Statement::CaseStmt { cases, else_branch, .. } => {
+                for (labels, body) in cases {
+                    if labels.iter().any(|e| super::utils::expr_text(e).contains(signal)) { return true; }
+                    if signal_used(body, signal) { return true; }
+                }
+                if signal_used(else_branch, signal) { return true; }
+            }
+            Statement::Call { name, .. } => {
+                if name == signal { return true; }
+            }
+            _ => {}
+        }
+    }
+    false
+}
+
+fn collect_names(stmts: &[Statement], names: &mut HashSet<String>, lines: &mut Vec<(String, usize)>) {
     for st in stmts {
         match st {
             Statement::Assign { target, line, .. } => {
-                if !names.contains(&target.name) {
-                    names.push(target.name.clone());
-                }
+                names.insert(target.name.clone());
                 lines.push((target.name.clone(), *line));
             }
             Statement::IfStmt { then_branch, else_branch, .. } => {
                 collect_names(then_branch, names, lines);
                 collect_names(else_branch, names, lines);
             }
+            Statement::CaseStmt { cases, else_branch, .. } => {
+                for (_, body) in cases { collect_names(body, names, lines); }
+                collect_names(else_branch, names, lines);
+            }
             Statement::Call { name, line, .. } => {
-                if !names.contains(name) {
-                    names.push(name.clone());
-                }
+                names.insert(name.clone());
                 lines.push((name.clone(), *line));
             }
             _ => {}

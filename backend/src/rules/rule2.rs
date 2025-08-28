@@ -1,67 +1,45 @@
 //! Rule 2: Track operating modes.
-//! Verify that the program tracks different operating modes (AUTO, MANUAL, etc.)
-//! and implements proper mode transitions with safety checks.
 
-use crate::ast::{Program, Statement, Expression};
-use super::{RuleResult, Violation};
+use crate::{rules::Violation, rules::RuleResult};
+use crate::ast::*;
+use super::utils::expr_text;
 
 pub fn check(program: &Program) -> RuleResult {
-    let mut violations = vec![];
+    let mut has_mode = false;
+    let mut first_fn_line = 0usize;
 
     for f in &program.functions {
-        let mut has_mode_tracking = false;
-        let mut has_mode_transitions = false;
-        
+        if first_fn_line == 0 { first_fn_line = f.line; }
         for st in &f.statements {
             match st {
-                Statement::Assign { target, value, line } => {
-                    let target_up = target.name.to_ascii_uppercase();
-                    if target_up.contains("MODE") || target_up.contains("AUTO") || target_up.contains("MANUAL") {
-                        has_mode_tracking = true;
+                Statement::Assign { target, .. } => {
+                    let n = target.name.to_ascii_uppercase();
+                    if n.contains("MODE") || n.contains("AUTO") || n.contains("MANUAL") || n.contains("RUNSTATE") {
+                        has_mode = true; break;
                     }
                 }
-                Statement::IfStmt { condition, line, .. } => {
-                    if condition_checks_mode(condition) {
-                        has_mode_transitions = true;
+                Statement::IfStmt { condition, .. } => {
+                    let c = expr_text(condition).to_ascii_uppercase();
+                    if c.contains("CPU_MODE") || c.contains(" MODE ") || c.contains("RUNSTATE") {
+                        has_mode = true; break;
                     }
                 }
+                Statement::CaseStmt { .. } => { has_mode = true; break; }
                 _ => {}
             }
         }
-
-        if !has_mode_tracking {
-            violations.push(Violation {
-                rule_no: 2,
-                rule_name: "Track operating modes",
-                line: f.line,
-                reason: format!("Function '{}' does not track operating modes", f.name),
-                suggestion: "Add variables to track AUTO/MANUAL/MAINTENANCE modes.".into(),
-            });
-        }
-
-        if has_mode_tracking && !has_mode_transitions {
-            violations.push(Violation {
-                rule_no: 2,
-                rule_name: "Track operating modes",
-                line: f.line,
-                reason: format!("Function '{}' tracks modes but lacks transition logic", f.name),
-                suggestion: "Add IF statements to handle mode transitions safely.".into(),
-            });
-        }
+        if has_mode { break; }
     }
 
-    RuleResult::violations(violations)
-}
-
-fn condition_checks_mode(expr: &Expression) -> bool {
-    match expr {
-        Expression::VariableRef(name) => {
-            let up = name.to_ascii_uppercase();
-            up.contains("MODE") || up.contains("AUTO") || up.contains("MANUAL")
-        }
-        Expression::BinaryOp { left, right, .. } => {
-            condition_checks_mode(left) || condition_checks_mode(right)
-        }
-        _ => false,
+    if has_mode {
+        RuleResult::ok(2, "Track operating modes")
+    } else {
+        RuleResult::violations(vec![Violation{
+            rule_no: 2,
+            rule_name: "Track operating modes".into(),
+            line: first_fn_line, // fallback (Program has no .line)
+            reason: "No state machine or explicit mode-tracking variable found.".into(),
+            suggestion: "Implement a CASE state machine or guard logic on CPU_MODE/Mode/RunState.".into()
+        }])
     }
 }
