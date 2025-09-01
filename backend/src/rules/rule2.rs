@@ -1,8 +1,7 @@
 //! Rule 2: Track operating modes.
 
-use crate::{rules::Violation, rules::RuleResult};
 use crate::ast::*;
-use super::utils::expr_text;
+use super::{RuleResult, Violation, utils::expr_text};
 
 pub fn check(program: &Program) -> RuleResult {
     let mut has_mode = false;
@@ -21,8 +20,7 @@ pub fn check(program: &Program) -> RuleResult {
                     }
                 }
                 Statement::IfStmt { condition, .. } => {
-                    let c = expr_text(condition).to_ascii_uppercase();
-                    if c.contains("CPU_MODE") || c.contains(" MODE ") || c.contains("RUNSTATE") {
+                    if condition_uses_mode_var(condition) {
                         has_mode = true; break;
                     }
                 }
@@ -30,7 +28,7 @@ pub fn check(program: &Program) -> RuleResult {
                     let c = expr_text(expression).to_ascii_uppercase();
                     // A CASE statement on a variable with "STATE" or "STEP" is a state machine.
                     if c.contains("MODE") || c.contains("STATE") || c.contains("STEP") {
-                        has_mode = true; break;
+                        has_mode = true; break; // This break is for the inner loop
                     }
                 }
                 _ => {}
@@ -49,5 +47,23 @@ pub fn check(program: &Program) -> RuleResult {
             reason: "No state machine or explicit mode-tracking variable found.".into(),
             suggestion: "Implement a CASE state machine or guard logic on CPU_MODE/Mode/RunState.".into()
         }])
+    }
+}
+
+/// Recursively check an expression to see if it references a mode-related variable.
+/// This is more robust than converting the expression to text and searching.
+fn condition_uses_mode_var(e: &Expression) -> bool {
+    match e {
+        Expression::VariableRef(s) => {
+            let up = s.trim().to_ascii_uppercase();
+            up == "CPU_MODE" || up.contains("MODE") || up.contains("RUNSTATE") // Check for mode-related keywords
+        }
+        Expression::UnaryOp { expr, .. } => condition_uses_mode_var(expr),
+        Expression::BinaryOp { left, right, .. } => {
+            condition_uses_mode_var(left) || condition_uses_mode_var(right)
+        }
+        Expression::Index { base, index, .. } => condition_uses_mode_var(base) || condition_uses_mode_var(index),
+        Expression::FuncCall { args, .. } => args.iter().any(condition_uses_mode_var),
+        _ => false,
     }
 }

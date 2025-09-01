@@ -2,84 +2,40 @@
 //! Flag any MyArray[IndexVar] that is not guarded by range checks.
 //! Also flag calls to known unsafe functions like strcpy.
 
-use crate::ast::{Expression, Program, Statement}; // Removed BinOp, UnaryOp
-use super::{RuleResult, Violation, utils::expr_text}; // Import the central utility
+use crate::ast::{BinOp, Expression, Program, Statement};
+use super::{RuleResult, Violation, utils::expr_text};
 
 pub fn check(program: &Program) -> RuleResult {
     let mut violations = vec![];
 
     for f in &program.functions {
-        walk_for_indexing(&f.statements, &mut vec![], &mut violations);
-        walk_for_unsafe_calls(&f.statements, &mut violations);
+        walk_statements(&f.statements, &mut vec![], &mut violations);
     }
 
     RuleResult::violations(violations)
 }
 
-// --- Check 1: Array Indexing ---
-fn walk_for_indexing(stmts: &[Statement], guards: &mut Vec<String>, out: &mut Vec<Violation>) {
+fn walk_statements<'a>(stmts: &'a [Statement], guards: &mut Vec<&'a Expression>, out: &mut Vec<Violation>) {
+    const UNSAFE_FUNCTIONS: &[&str] = &["STRCPY", "MEMCPY", "S_MOVE"];
+
     for st in stmts {
         match st {
             Statement::IfStmt { condition, then_branch, else_branch, .. } => {
-                guards.push(expr_text(condition));
-                walk_for_indexing(then_branch, guards, out);
-                walk_for_indexing(else_branch, guards, out);
+                // The condition guards the `then` branch.
+                guards.push(condition);
+                walk_statements(then_branch, guards, out);
                 guards.pop();
+
+                // The `else` branch is walked with the original guards, but not the new one.
+                walk_statements(else_branch, guards, out);
             }
             Statement::Assign { target, value, line, .. } => {
-                // With the improved AST, we can now check both the target (LHS)
-                // and the value (RHS) of an assignment for index violations.
-                find_index_violations(target, *line, guards, out);
-                find_index_violations(value, *line, guards, out);
+                find_violations_in_expr(target, *line, guards, out);
+                find_violations_in_expr(value, *line, guards, out);
             }
             Statement::Expr { expr, line, .. } => {
-                find_index_violations(expr, *line, guards, out);
+                find_violations_in_expr(expr, *line, guards, out);
             }
-            _ => {}
-        }
-    }
-}
-
-fn find_index_violations(e: &Expression, line: usize, guards: &Vec<String>, out: &mut Vec<Violation>) {
-    match e {
-        Expression::Index { base, index, .. } => {
-            let idx_txt = expr_text(index);
-            let idx_up = idx_txt.to_ascii_uppercase();
-            let guarded = guards.iter().any(|g| {
-                let g = g.replace(' ', "").to_ascii_uppercase();
-                let idx = idx_up.replace(' ', "");
-                (g.contains(&idx) && (g.contains("<") || g.contains("<=") || g.contains("BOUND") || g.contains("LIMIT")))|| g.contains(&format!("NOT({}>", idx)) // simple negated form
-            });
-            if !guarded && matches!(**index, Expression::VariableRef(_)) {
-                out.push(Violation {
-                    rule_no: 9,
-                    rule_name: "Validate indirections",
-                    line,
-                    reason: format!("Array indexed by variable '{}' without bounds check", idx_txt),
-                    suggestion: "Validate index against array bounds before access (e.g., IF index < LIMIT THEN...).".into(),
-                });
-            }
-            find_index_violations(base, line, guards, out);
-            find_index_violations(index, line, guards, out);
-        }
-        Expression::BinaryOp { left, right, .. } => {
-            find_index_violations(left, line, guards, out);
-            find_index_violations(right, line, guards, out);
-        }
-        Expression::FuncCall { args, .. } => {
-            for arg in args {
-                find_index_violations(arg, line, guards, out);
-            }
-        }
-        _ => {}
-    }
-}
-
-// --- Check 2: Unsafe Function Calls ---
-fn walk_for_unsafe_calls(stmts: &[Statement], out: &mut Vec<Violation>) {
-    const UNSAFE_FUNCTIONS: &[&str] = &["STRCPY", "MEMCPY", "S_MOVE"]; // Case-insensitive check
-    for st in stmts {
-        match st {
             Statement::Call { name, line, .. } => {
                 let name_up = name.to_ascii_uppercase();
                 if UNSAFE_FUNCTIONS.iter().any(|&f| name_up.contains(f)) {
@@ -92,13 +48,61 @@ fn walk_for_unsafe_calls(stmts: &[Statement], out: &mut Vec<Violation>) {
                     });
                 }
             }
-            Statement::IfStmt { then_branch, else_branch, .. } => {
-                walk_for_unsafe_calls(then_branch, out);
-                walk_for_unsafe_calls(else_branch, out);
-            }
             _ => {}
         }
     }
 }
 
-// The local expr_text function has been removed.
+fn find_violations_in_expr(e: &Expression, line: usize, guards: &[&Expression], out: &mut Vec<Violation>) {
+    match e {
+        Expression::Index { base, index, .. } => {
+            if let Expression::VariableRef(idx_name) = &**index {
+                let is_guarded = guards.iter().any(|g| is_var_constrained(idx_name, g));
+                if !is_guarded {
+                    out.push(Violation {
+                        rule_no: 9,
+                        rule_name: "Validate indirections",
+                        line,
+                        reason: format!("Array indexed by variable '{}' without bounds check", idx_name),
+                        suggestion: "Validate index against array bounds before access (e.g., IF index < LIMIT THEN...).".into(),
+                    });
+                }
+            }
+            // Recurse
+            find_violations_in_expr(base, line, guards, out);
+            find_violations_in_expr(index, line, guards, out);
+        }
+        Expression::BinaryOp { left, right, .. } => {
+            find_violations_in_expr(left, line, guards, out);
+            find_violations_in_expr(right, line, guards, out);
+        }
+        Expression::FuncCall { args, .. } => {
+            for arg in args {
+                find_violations_in_expr(arg, line, guards, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Checks if a guard expression `g` places a constraint on a variable `var_name`.
+fn is_var_constrained(var_name: &str, g: &Expression) -> bool {
+    match g {
+        Expression::BinaryOp { op, left, right, .. } => {
+            // Look for `var_name <op> literal` or `literal <op> var_name`
+            let is_comparison = matches!(op, BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge | BinOp::Eq | BinOp::Neq);
+            if is_comparison {
+                let left_text = expr_text(left);
+                let right_text = expr_text(right);
+                if (left_text.eq_ignore_ascii_case(var_name) && matches!(**right, Expression::NumberLiteral(..))) ||
+                   (right_text.eq_ignore_ascii_case(var_name) && matches!(**left, Expression::NumberLiteral(..))) {
+                    return true;
+                }
+            }
+            // Recurse for compound conditions like `X > 0 AND X < 10`
+            is_var_constrained(var_name, left) || is_var_constrained(var_name, right)
+        }
+        Expression::UnaryOp { expr, .. } => is_var_constrained(var_name, expr),
+        _ => false,
+    }
+}

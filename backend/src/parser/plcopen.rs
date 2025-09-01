@@ -8,7 +8,7 @@ use std::path::Path;
 use quick_xml::events::Event;
 use quick_xml::Reader;
 
-use crate::ast::{Expression, Function, FunctionKind, Program, Statement, Variable};
+use crate::ast::{Expression, Function, FunctionKind, Program, Statement};
 
 /// Parses a PLCOpen XML file from a given path.
 /// This is a wrapper for the command-line tool.

@@ -58,7 +58,7 @@ const App: React.FC = () => {
        * available in the `wasm` directory at the project root as described in
        * the project README.
        */
-      const module = await import(/* @vite-ignore */ '../wasm/plc_secure_checker.js');
+      const module = await import(/* @vite-ignore */ '../wasm/plc_secure_checker_lib.js');
       // If the module has a default export, call it to initialize the wasm module.
       if (typeof module.default === 'function') {
         await module.default();

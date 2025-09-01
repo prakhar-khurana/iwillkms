@@ -2,7 +2,7 @@
 //! Taint propagation from HMI/recipe sources to sensitive sinks,
 //! suppressed by nearby @PlausibilityCheck or dominating range/limit guards.
 
-use crate::ast::{BinOp, Expression, Program, Statement};
+use crate::ast::{Expression, Program, Statement};
 use super::{utils, utils::expr_text, RuleResult, Violation};
 use std::collections::HashSet;
 

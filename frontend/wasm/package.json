@@ -3,12 +3,12 @@
   "type": "module",
   "version": "0.1.0",
   "files": [
-    "plc_secure_checker_bg.wasm",
-    "plc_secure_checker.js",
-    "plc_secure_checker.d.ts"
+    "plc_secure_checker_lib_bg.wasm",
+    "plc_secure_checker_lib.js",
+    "plc_secure_checker_lib.d.ts"
   ],
-  "main": "plc_secure_checker.js",
-  "types": "plc_secure_checker.d.ts",
+  "main": "plc_secure_checker_lib.js",
+  "types": "plc_secure_checker_lib.d.ts",
   "sideEffects": [
     "./snippets/*"
   ]

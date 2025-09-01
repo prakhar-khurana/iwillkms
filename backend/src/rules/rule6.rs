@@ -47,6 +47,19 @@ fn scan(
                     } else {
                         tainted.remove(&target_up);
                     }
+
+                    // Also check if this assignment itself is a sink
+                    if is_timer_preset_sink(target_name, None) && rhs_is_tainted {
+                        let annotated = utils::has_plausibility_annotation_above(*line, 3);
+                        let has_range = guard_has_range_or_limit(&guard_text);
+                        if !(annotated || has_range) {
+                            out.push(Violation {
+                                rule_no: 6, rule_name: "Validate timers and counters", line: *line,
+                                reason: format!("Timer preset '{}' set from unvalidated source", target_name),
+                                suggestion: "Add a range/plausibility check before setting timer presets.".into(),
+                            });
+                        }
+                    }
                 }
             }
 
@@ -159,13 +172,18 @@ fn is_source(e: &Expression) -> bool {
 
 fn is_timer_preset_sink(call_name: &str, arg_name: Option<&str>) -> bool {
     let call_up = call_name.to_ascii_uppercase();
-    let is_timer = call_up.ends_with("TP") || call_up.ends_with("TON") || call_up.ends_with("TOF");
-
-    if !is_timer { return false; }
-
-    // If arg_name is Some, we have a named argument. Check if it's "PT".
-    // If arg_name is None, it's a positional call, which we assume is a sink.
-    arg_name.map_or(true, |n| n.to_ascii_uppercase() == "PT")
+    if let Some(arg) = arg_name {
+        // It's a function call with a named argument, e.g., `TON(PT := ...)`
+        let is_timer_call = call_up.ends_with("TP") || call_up.ends_with("TON") || call_up.ends_with("TOF");
+        let is_pt_arg = arg.to_ascii_uppercase() == "PT";
+        is_timer_call && is_pt_arg
+    } else {
+        // It's a variable assignment, e.g., `MyTimerPreset := ...`
+        // or a positional function call.
+        let is_timer_call = call_up.ends_with("TP") || call_up.ends_with("TON") || call_up.ends_with("TOF");
+        let is_preset_var = call_up.contains("PRESET") || call_up.contains("_PT");
+        is_timer_call || is_preset_var
+    }
 }
 
 fn collect_vars(e: &Expression, out: &mut HashSet<String>) {

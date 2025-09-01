@@ -2,8 +2,8 @@
 //! Flag any `/` operations that are *not* inside a conditional checking
 //! status word flags (e.g., SW.OV=0 AND SW.OS=0) or zero divisor.
 
-use crate::ast::{Expression, Program, Statement, BinOp};
-use super::{RuleResult, Violation, utils::expr_text}; // Use the central utility
+use crate::ast::{BinOp, Expression, Program, Statement};
+use super::{utils, RuleResult, Violation};
 
 pub fn check(program: &Program) -> RuleResult {
     let mut violations = vec![];
@@ -19,11 +19,10 @@ fn collect_div_violations(stmts: &[Statement], guarded: bool, out: &mut Vec<Viol
     for st in stmts {
         match st {
             Statement::IfStmt { condition, then_branch, else_branch, .. } => {
-                let cond = expr_text(condition).to_ascii_uppercase();
-                let sw_guard = cond.contains("SW.") && cond.contains("OV=0") && cond.contains("OS=0");
-                let zero_guard = cond.contains("<>0") || cond.contains("!=0");
-                let guarded_then = sw_guard && zero_guard;
-                collect_div_violations(then_branch, guarded || guarded_then, out);
+                let is_valid_guard = is_division_guard(condition);
+                // The `then` branch is guarded if we are already in a guarded block OR the new condition is a valid guard.
+                collect_div_violations(then_branch, guarded || is_valid_guard, out);
+                // The `else` branch is only guarded if we were already in a guarded block.
                 collect_div_violations(else_branch, guarded, out);
             }
 
@@ -37,7 +36,7 @@ fn collect_div_violations(stmts: &[Statement], guarded: bool, out: &mut Vec<Viol
 
 fn find_divs(expr: &Expression, line: usize, guarded: bool, out: &mut Vec<Violation>) {
     match expr {
-        Expression::BinaryOp { op: BinOp::Div, left, right, .. } => {
+        Expression::BinaryOp { op: BinOp::Div, .. } => {
             if !guarded {
                 out.push(Violation {
                     rule_no: 4,
@@ -47,8 +46,7 @@ fn find_divs(expr: &Expression, line: usize, guarded: bool, out: &mut Vec<Violat
                     suggestion: "Wrap division inside IF SW.OV=0 AND SW.OS=0 AND divisor<>0 THEN ...".into(),
                 });
             }
-            find_divs(left, line, guarded, out);
-            find_divs(right, line, guarded, out);
+            // Don't recurse into children of a division; one violation is enough.
         }
         Expression::BinaryOp { left, right, .. } => {
             find_divs(left, line, guarded, out);
@@ -60,4 +58,14 @@ fn find_divs(expr: &Expression, line: usize, guarded: bool, out: &mut Vec<Violat
         }
         _ => {}
     }
+}
+
+/// Checks if an expression is a valid guard for a division operation.
+/// This is a simplified check; a more robust implementation would parse the
+/// divisor from the guarded block and ensure it's the one being checked.
+fn is_division_guard(e: &Expression) -> bool {
+    let text = utils::expr_text(e).to_ascii_uppercase();
+    let has_sw_check = text.contains("SW.OV=0") && text.contains("SW.OS=0");
+    let has_zero_check = text.contains("<>0") || text.contains("!=0");
+    has_sw_check || has_zero_check
 }
