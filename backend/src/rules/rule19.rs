@@ -56,7 +56,7 @@ fn scan(stmts: &[Statement], read: &mut Option<usize>, compare: &mut bool, emit:
                 }
             }
             Statement::Assign { target, value, .. } => {
-                if let Expression::VariableRef(target_name) = target {
+                if let Expression::Identifier(target_name) = target {
                     let tgt = target_name.to_ascii_uppercase();
                     let vtxt = expr_text(value).to_ascii_uppercase();
                     if (tgt.contains("HMI") || tgt.contains("DB") || tgt.contains("LOG"))

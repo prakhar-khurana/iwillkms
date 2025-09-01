@@ -12,7 +12,7 @@ pub fn check(program: &Program) -> RuleResult {
         for st in &f.statements {
             match st {
                 Statement::Assign { target, .. } => {
-                    if let Expression::VariableRef(name) = target {
+                    if let Expression::Identifier(name) = target {
                         let n = name.to_ascii_uppercase();
                         if n.contains("MODE") || n.contains("AUTO") || n.contains("MANUAL") || n.contains("RUNSTATE") {
                             has_mode = true; break;
@@ -54,9 +54,9 @@ pub fn check(program: &Program) -> RuleResult {
 /// This is more robust than converting the expression to text and searching.
 fn condition_uses_mode_var(e: &Expression) -> bool {
     match e {
-        Expression::VariableRef(s) => {
+        Expression::Identifier(s) => {
             let up = s.trim().to_ascii_uppercase();
-            up == "CPU_MODE" || up.contains("MODE") || up.contains("RUNSTATE") // Check for mode-related keywords
+            up.contains("CPU_MODE") || up.contains("MODE") || up.contains("RUNSTATE") // Check for mode-related keywords
         }
         Expression::UnaryOp { expr, .. } => condition_uses_mode_var(expr),
         Expression::BinaryOp { left, right, .. } => {

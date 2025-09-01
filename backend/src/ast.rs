@@ -114,6 +114,7 @@ pub enum BinOp {
     // Boolean operators
     And,
     Or,
+    Assign,
 }
 
 /// Expressions are deliberately minimal; we only model what is useful for rules.
@@ -124,7 +125,7 @@ pub enum Expression {
     /// boolean literal with best-effort source line
     BoolLiteral(bool, usize),
     /// `Some.Var.Name`
-    VariableRef(String),
+    Identifier(String),
     /// unary operation (e.g. NOT <expr>)
     UnaryOp {
         op: UnaryOp,
@@ -149,6 +150,7 @@ pub enum Expression {
         args: Vec<Expression>,
         line: usize,
     },
+    StringLiteral(String, usize),
 }
 
 impl fmt::Display for Variable {
@@ -167,7 +169,8 @@ impl Expression {
             Expression::BinaryOp { line, .. } => *line,
             Expression::Index { line, .. } => *line,
             Expression::FuncCall { line, .. } => *line,
-            Expression::VariableRef(_) => 0, // VariableRef doesn't store a line, so we return a default.
+            Expression::StringLiteral(_, line) => *line,
+            Expression::Identifier(_) => 0,
         }
     }
 }

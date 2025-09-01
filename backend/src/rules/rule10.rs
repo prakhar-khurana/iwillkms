@@ -14,7 +14,7 @@ pub fn check(program: &Program, policy: &Policy) -> RuleResult {
     for func in &program.functions {
         for st in &func.statements {
             if let Statement::Assign { target, line, .. } = st {
-                if let Expression::VariableRef(target_name) = target {
+                if let Expression::Identifier(target_name) = target {
                     if let Some((area, addr)) = parse_mem_address(target_name) {
                         for r in areas {
                             if r.access.to_ascii_lowercase() == "readonly" && r.applies(&area, addr) {

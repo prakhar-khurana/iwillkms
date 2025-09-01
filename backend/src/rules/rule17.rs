@@ -25,7 +25,7 @@ pub fn check(program: &Program) -> RuleResult {
                     }
                 }
                 Statement::Assign { target, value, .. } => {
-                    if let Expression::VariableRef(target_name) = target {
+                    if let Expression::Identifier(target_name) = target {
                         // Monotonic counter like Uptime := Uptime + 1
                         let tgt = target_name.to_ascii_uppercase();
                         let vtxt = expr_text(value).to_ascii_uppercase();
@@ -41,7 +41,7 @@ pub fn check(program: &Program) -> RuleResult {
         // Second pass: detect reporting to HMI/DB/LOG
         for st in &f.statements {
             if let Statement::Assign { target, value, .. } = st {
-                if let Expression::VariableRef(target_name) = target {
+                if let Expression::Identifier(target_name) = target {
                     let tgt = target_name.to_ascii_uppercase();
                     let vtxt = expr_text(value).to_ascii_uppercase();
                     if (tgt.contains("HMI") || tgt.contains("DB") || tgt.contains("LOG"))

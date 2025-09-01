@@ -37,7 +37,7 @@ fn find_concurrent_activations(
 
         match st {
             Statement::Assign { target, value, line } => {
-                if let Expression::VariableRef(target_name) = target {
+                if let Expression::Identifier(target_name) = target {
                     let target_up = target_name.to_ascii_uppercase();
                     let is_true = is_true_expr(value);
 
