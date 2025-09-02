@@ -56,7 +56,7 @@ fn walk_statements<'a>(stmts: &'a [Statement], guards: &mut Vec<&'a Expression>,
 fn find_violations_in_expr(e: &Expression, line: usize, guards: &[&Expression], out: &mut Vec<Violation>) {
     match e {
         Expression::Index { base, index, .. } => {
-            if let Expression::VariableRef(idx_name) = &**index {
+            if let Expression::Identifier(idx_name) = &**index {
                 let is_guarded = guards.iter().any(|g| is_var_constrained(idx_name, g));
                 if !is_guarded {
                     out.push(Violation {
@@ -92,10 +92,10 @@ fn is_var_constrained(var_name: &str, g: &Expression) -> bool {
             // Look for `var_name <op> literal` or `literal <op> var_name`
             let is_comparison = matches!(op, BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge | BinOp::Eq | BinOp::Neq);
             if is_comparison {
-                let left_text = expr_text(left);
-                let right_text = expr_text(right);
-                if (left_text.eq_ignore_ascii_case(var_name) && matches!(**right, Expression::NumberLiteral(..))) ||
-                   (right_text.eq_ignore_ascii_case(var_name) && matches!(**left, Expression::NumberLiteral(..))) {
+                let left_text = expr_text(left).trim().to_string();
+                let right_text = expr_text(right).trim().to_string();
+                if (left_text.eq_ignore_ascii_case(var_name.trim()) && matches!(**right, Expression::NumberLiteral(..))) ||
+                   (right_text.eq_ignore_ascii_case(var_name.trim()) && matches!(**left, Expression::NumberLiteral(..))) {
                     return true;
                 }
             }

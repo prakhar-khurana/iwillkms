@@ -74,7 +74,7 @@ fn walk_ob100(
     for st in stmts {
         match st {
             Statement::Assign { target, value, line } => {
-                if let Expression::VariableRef(name) = target {
+                if let Expression::Identifier(name) = target {
                     if looks_like_critical_output(name) {
                         if is_safe_expr(value) {
                             safe_inits.push((*line, name.clone()));

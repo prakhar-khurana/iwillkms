@@ -76,7 +76,7 @@ fn parse_statements_from_il(
             "ST" => {
                 if let (Some(target_var), Some(value_expr)) = (operand_str, current_result.take()) {
                     let stmt = Statement::Assign {
-                        target: Expression::VariableRef(target_var.to_string()),
+                        target: Expression::Identifier(target_var.to_string()),
                         value: value_expr,
                         line: line_no,
                     };
@@ -153,6 +153,6 @@ fn parse_operand(op: &str, line: usize) -> Expression {
     } else if op.eq_ignore_ascii_case("FALSE") {
         Expression::BoolLiteral(false, line)
     } else {
-        Expression::VariableRef(op.to_string())
+        Expression::Identifier(op.to_string())
     }
 }

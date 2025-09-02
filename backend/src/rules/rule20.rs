@@ -45,7 +45,7 @@ fn signal_used(stmts: &[Statement], signal: &str) -> bool {
     for st in stmts {
         match st {
             Statement::Assign { target, value, .. } => {
-                if let Expression::VariableRef(target_name) = target {
+                if let Expression::Identifier(target_name) = target {
                     if target_name == signal { return true; }
                 }
                 if super::utils::expr_text(value).contains(signal) { return true; } // Check RHS
@@ -75,7 +75,7 @@ fn collect_names(stmts: &[Statement], names: &mut HashSet<String>, lines: &mut V
     for st in stmts {
         match st {
             Statement::Assign { target, line, .. } => {
-                if let Expression::VariableRef(name) = target {
+                if let Expression::Identifier(name) = target {
                     names.insert(name.clone());
                     lines.push((name.clone(), *line));
                 }

@@ -61,7 +61,7 @@ fn has_integrity_check(stmts: &[Statement]) -> bool {
             let is_compare = c.contains("<>") || c.contains("!=");
             let sets_alarm = then_branch.iter().any(|s| {
                 if let Statement::Assign { target, .. } = s {
-                    if let Expression::VariableRef(name) = target {
+                    if let Expression::Identifier(name) = target {
                         return name.to_ascii_uppercase().contains("ALARM");
                     }
                 }
@@ -82,7 +82,7 @@ fn has_integrity_check(stmts: &[Statement]) -> bool {
 
 fn find_vars(e: &Expression, out: &mut Vec<String>) {
     match e {
-        Expression::VariableRef(s) => out.push(s.clone()),
+        Expression::Identifier(s) => out.push(s.clone()),
         Expression::BinaryOp { left, right, .. } => {
             find_vars(left, out);
             find_vars(right, out);

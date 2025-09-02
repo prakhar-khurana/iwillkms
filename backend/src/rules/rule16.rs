@@ -33,7 +33,7 @@ fn scan(stmts: &[Statement], cap: &mut bool, emit: &mut bool) {
     for st in stmts {
         match st {
             Statement::Assign { target, value, .. } => {
-                if let Expression::VariableRef(target_name) = target {
+                if let Expression::Identifier(target_name) = target {
                     let v = expr_text(value).to_ascii_uppercase();
                     let t = target_name.to_ascii_uppercase();
                     if v.contains("OB1_PREV_CYCLE") { *cap = true; }

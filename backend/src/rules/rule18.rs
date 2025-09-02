@@ -56,7 +56,7 @@ fn has_diag_action(stmts: &[Statement]) -> bool {
     for st in stmts {
         match st {
             Statement::Assign { target, value, .. } => {
-                if let Expression::VariableRef(target_name) = target {
+                if let Expression::Identifier(target_name) = target {
                     let t = target_name.to_ascii_uppercase();
                     let v = super::utils::expr_text(value).to_ascii_uppercase();
                     if t.contains("ALARM") || t.contains("DIAG") || t.contains("FAULT") || v.contains("LOG") {

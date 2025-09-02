@@ -1,0 +1,5 @@
+PROGRAM _CYCLIC
+  IF (TRUE) THEN
+    x := 1;
+  END_IF
+END_PROGRAM

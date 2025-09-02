@@ -64,7 +64,7 @@ fn find_divs(expr: &Expression, line: usize, guarded: bool, out: &mut Vec<Violat
 /// This is a simplified check; a more robust implementation would parse the
 /// divisor from the guarded block and ensure it's the one being checked.
 fn is_division_guard(e: &Expression) -> bool {
-    let text = utils::expr_text(e).to_ascii_uppercase();
+    let text = utils::expr_text(e).replace(' ', "").to_ascii_uppercase();
     let has_sw_check = text.contains("SW.OV=0") && text.contains("SW.OS=0");
     let has_zero_check = text.contains("<>0") || text.contains("!=0");
     has_sw_check || has_zero_check

@@ -89,7 +89,7 @@ pub fn parse_plcopen_from_str(src: &str) -> Result<Program, String> {
                     if let Some((var, val)) = read_variable_assignment(&mut reader, e)? {
                         if let Some(f) = current_func.as_mut() {
                             f.statements.push(Statement::Assign {
-                                target: Expression::VariableRef(var),
+                                target: Expression::Identifier(var),
                                 value: val,
                                 line: 0,
                             });
@@ -156,7 +156,7 @@ fn read_variable_assignment(
                 if let Ok(n) = val.parse::<i64>() {
                     Expression::NumberLiteral(n, 0)
                 } else {
-                    Expression::VariableRef(val)
+                    Expression::Identifier(val)
                 }
             }
         };

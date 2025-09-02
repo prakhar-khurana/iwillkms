@@ -1,0 +1,115 @@
+// -- Grammar Rules for SCL Parsing --
+
+WHITESPACE = _{ " " | "\t" | "\r" | "\n" | comment }
+comment = { block_comment | line_comment }
+block_comment = { "(*" ~ (!"*)" ~ ANY)* ~ "*)" }
+line_comment  = { "//" ~ (!"\n" ~ ANY)* }
+
+// Top-level program
+program = { SOI ~ (program_block | function_block | function | organization_block)* ~ EOI }
+
+// Block definitions
+program_block      = { PROGRAM ~ identifier ~ BEGIN* ~ statement_list ~ END_P }
+organization_block = { ORGANIZATION_BLOCK ~ identifier ~ BEGIN* ~ statement_list ~ END_ORGANIZATION_BLOCK }
+function_block     = { FUNCTION_BLOCK ~ identifier ~ BEGIN* ~ statement_list ~ END_FB }
+function           = { FUNCTION ~ identifier ~ BEGIN* ~ statement_list ~ END_F }
+
+BEGIN = @{ ^"BEGIN" }
+
+// ---------------- Keywords ----------------
+KEYWORD = _{
+      "PROGRAM" | "END_PROGRAM"
+    | "ORGANIZATION_BLOCK" | "END_ORGANIZATION_BLOCK"
+    | "FUNCTION_BLOCK" | "END_FUNCTION_BLOCK"
+    | "FUNCTION" | "END_FUNCTION"
+    | "IF" | "THEN" | "ELSIF" | "ELSE" | "END_IF"
+    | "CASE" | "OF" | "END_CASE"
+    | "NOT" | "OR" | "AND"
+}
+
+PROGRAM                = @{ ^"PROGRAM" }
+END_P                  = @{ ^"END_PROGRAM" }
+ORGANIZATION_BLOCK     = @{ ^"ORGANIZATION_BLOCK" }
+END_ORGANIZATION_BLOCK = @{ ^"END_ORGANIZATION_BLOCK" }
+FUNCTION_BLOCK         = @{ ^"FUNCTION_BLOCK" }
+END_FB                 = @{ ^"END_FUNCTION_BLOCK" }
+FUNCTION               = @{ ^"FUNCTION" }
+END_F                  = @{ ^"END_FUNCTION" }
+IF                     = @{ ^"IF" }
+THEN                   = @{ ^"THEN" }
+ELSIF                  = @{ ^"ELSIF" }
+ELSE                   = @{ ^"ELSE" }
+END_IF                 = @{ ^"END_IF" }
+CASE                   = @{ ^"CASE" }
+OF                     = @{ ^"OF" }
+END_CASE               = @{ ^"END_CASE" }
+NOT                    = @{ ^"NOT" }
+OR                     = @{ ^"OR" }
+AND                    = @{ ^"AND" }
+
+// ---------------- Operators ----------------
+COMPARISON_OP = @{ "<>" | "<=" | ">=" | "=" | "<" | ">" }
+ADD    = { "+" }
+SUB    = { "-" }
+MUL    = { "*" }
+DIV    = { "/" }
+ASSIGN = { ":=" }
+
+// ---------------- Statements ----------------
+statement_list = { statement* }
+
+statement = _{
+      (assignment_statement | call_statement) ~ ";"
+    | if_statement
+    | case_statement
+}
+
+assignment_statement = { expression ~ ASSIGN ~ expression }
+
+if_statement = {
+    IF ~ expression ~ THEN ~ statement_list
+    ~ (ELSIF ~ expression ~ THEN ~ statement_list)*
+    ~ (ELSE ~ statement_list)?
+    ~ END_IF ~ ";"?
+}
+
+case_statement = { CASE ~ expression ~ OF ~ case_option* ~ (ELSE ~ statement_list)? ~ END_CASE ~ ";"? }
+case_option    = { case_label ~ ":" ~ statement_list }
+case_label     = { expression ~ ("," ~ expression)* }
+
+call_statement = { function_call }
+
+// ---------------- Expressions (Corrected for Pratt Parser) ----------------
+expression = { prefix_op* ~ primary ~ (infix_op ~ prefix_op* ~ primary)* }
+
+prefix_op = _{ NOT }
+infix_op = _{ OR | AND | COMPARISON_OP | ADD | SUB | MUL | DIV }
+
+primary = {
+      number
+    | boolean
+    | string
+    | function_call
+    | array_access
+    | identifier
+    | memory_identifier
+    | "(" ~ expression ~ ")"
+}
+
+function_call = { identifier ~ WHITESPACE* ~ "(" ~ (arg_list)? ~ ")" }
+arg_list  = { arg ~ ("," ~ arg)* }
+arg       = { named_arg | expression }
+named_arg = { identifier ~ ASSIGN ~ expression }
+array_access  = { identifier ~ "[" ~ expression ~ "]" }
+
+// ---------------- Identifiers & literals ----------------
+identifier = @{
+    !KEYWORD
+    ~ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")*
+    ~ ("." ~ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")*)*
+}
+
+number  = @{ "-"? ~ ASCII_DIGIT+ }
+string  = @{ "'" ~ (!"'" ~ ANY)* ~ "'" }
+boolean = @{ ^"TRUE" | ^"FALSE" }
+memory_identifier = @{ "%" ~ ASCII_ALPHANUMERIC+ }
